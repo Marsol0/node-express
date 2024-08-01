@@ -1,12 +1,12 @@
-import UserModel from '../model/user.js';
-import tickedModel from '../model/ticket.js'
+import userSchema from '../model/user.js';
+
 
 const GET_ALL_USERS = async (req, res) => {
     try {
        
-        const users = await UserModel.find().lean(); // Fetch all users from the database
-        const ticket = await tickedModel.find()
-        console.log(0)
+        const users = await userSchema.find().lean(); // Fetch all users from the database
+        
+        
         if (users.length === 0) {
             return res.status(404).json({ message: 'No users found' });
         }
@@ -22,15 +22,12 @@ const GET_ALL_USERS = async (req, res) => {
     }
 };
 
-const BUY_A_TICKET = async(req, res) => {
-    
-}
 
 const GET_USER_BY_ID = async (req, res) => {
     const id = req.params.id; // Extract id from route parameter
     
     try {
-        const user = await UserModel.findOne({ id }).lean(); // Find user by UUID
+        const user = await userSchema.findOne({ id }).lean(); // Find user by UUID
         // lean() returns simpler object. don't need the full Mongoose document functionality
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -47,4 +44,4 @@ const GET_USER_BY_ID = async (req, res) => {
     }
 };
 
-export { GET_ALL_USERS, BUY_A_TICKET, GET_USER_BY_ID }
+export { GET_ALL_USERS, GET_USER_BY_ID }

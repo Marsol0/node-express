@@ -1,21 +1,22 @@
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 
-const authUser = (req, res, next) => {
-    const token = req.headers.authorization;
-    if (!token) {
-        return res.status(401).json({ message: "Authorization token is missing" });
-    }
+const authUser = (req, res, next)=> {
+const token = req.headers.authorization;
+if (!token){
+    return res.status(401).json({message: "Not working!"});
+}
 
-    
-        const decryptedInfo = jwt.verify(token, process.env.TOKEN_PASSWORD);
+jwt.verify(token, process.env.JWT_SECRET, (err, decoded)=>{
+   if(err){
+    return res.status(401).json({message: "code is wrong!"});
+   }
 
-       if (!decryptedInfo) {
-        return res.status(401).json({ message: "Auth failed"})
-       }
-    req.body.owner_id = decryptedInfo.owner_id
+ 
 
-        next();
-    
-};
+   return next();
+})
+
+
+}
 
 export default authUser;

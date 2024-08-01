@@ -1,19 +1,12 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import UserModel from '../model/user.js';
+import userSchema from '../model/user.js';
+import uniqid from 'uniqid';
 
-
-const generateToken = (payload, expiresIn) => {
-    const secret = process.env.TOKEN_PASSWORD;
-    if (!secret) {
-        throw new Error('TOKEN_PASSWORD environment variable is not set.');
-    }
-    return jwt.sign(payload, secret, { expiresIn });
-};
 
 const SIGN_UP = async (req, res) => {
     try {
-        const { name, email, password, money_balance } = req.body;
+        const { name, email, password, money_balance  } = req.body;
 
         // Validate email
         if (!email.includes("@")) {
@@ -37,53 +30,87 @@ const SIGN_UP = async (req, res) => {
         const hash = bcrypt.hashSync(password, salt);
 
         // Create user model
-        const user = new UserModel({
+        const user = new userSchema({
+            id: uniqid(),
             name: capitalizedName,
-            email,
+            email: req.body.email,
             password: hash,
-            money_balance
+            bought_tickets: req.body.bought_tickets,
+            money_balance: req.body.money_balance,
         });
 
-        const token = generateToken({ email: user.email, userid: user._id }, '12h');
-        const refreshToken = generateToken({ email: user.email, userid: user._id }, '1d');
-
-        // Save user to database
+         // Save user to database
         await user.save();
+
+        const token = jwt.sign(
+            {
+              email: user.email,
+              userId: user._id,
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "2h" },
+            { algorithm: "RS256" }
+          );
+          const tokenRefresh = jwt.sign(
+            {
+              email: user.email,
+              userId: user._id,
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "24h" },
+            { algorithm: "RS256" }
+          );
+       
         
         return res.status(200).json({
             user_model: user,
-            token,
-            refreshToken
+            token: token,
+            tokenRefresh: tokenRefresh,
         });
     } catch (err) {
         console.log("Error message:", err);
-        return res.status(500).json({ message: "Internal server error" });
+        return res.status(400).json({ message: "Emaill addres or password is wrong" });
     }
 };
 
 const LOGIN = async (req, res) => {
     try {
-        const { email, password } = req.body;
-
+        
         // Find user by email
-        const user = await UserModel.findOne({ email: email });
+        const user = await userSchema.findOne({ email: req.body.email })
+
         if (!user) {
             return res.status(404).json({ message: "User not found. Please check email address and try again." });
         }
 
         // Check password
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
+        const isPasswordMatch = await bcrypt.compare(req.body.password, user.password);
+        if (!isPasswordMatch) {
             return res.status(400).json({ message: "Wrong password" });
         }
-
-        const token = generateToken({ email: user.email, userid: user._id }, '12h');
-        const refreshToken = generateToken({ email: user.email, userid: user._id }, '1d');
-        
+        const token = jwt.sign(
+            {
+              email: user.email,
+              userId: user._id,
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "1h" },
+            { algorithm: "RS256" }
+          );
+          const tokenRefresh = jwt.sign(
+            {
+              email: user.email,
+              userId: user._id,
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "24h" },
+            { algorithm: "RS256" }
+          );
+     
         return res.status(200).json({
             message: "You have successfully logged in.",
-            token,
-            refreshToken
+            token: token,
+            tokenRefresh: tokenRefresh
         });
     } catch (err) {
         console.log("Error message:", err);
@@ -91,28 +118,28 @@ const LOGIN = async (req, res) => {
     }
 };
 
-const REFRESH_TOKEN = async (req, res) => {
-    try {
-        const refreshToken = req.headers['x-refresh-token']; // Extract from header
-        
-        if (!refreshToken) {
-            return res.status(400).json({ message: "Refresh token is required." });
-        }
-
-        // Verify the refresh token
-        jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
-            if (err) {
-                return res.status(403).json({ message: "Invalid refresh token." });
-            }
-            
-            // Generate a new access token
-            const newToken = generateToken({ email: decoded.email, userid: decoded.userid }, '12h');
-            return res.status(200).json({ token: newToken });
+const GET_NEW_JWT_TOKEN = (req, res) => {
+    const refreshToken = req.headers.tokenrefresh;
+    console.log(refreshToken);
+  
+    jwt.verify(refreshToken, process.env.JWT_SECRET, (err, decoded) => {
+      
+      if (err) {
+        return res.status(400).json({ 
+            message: "Unauthorized,session expired you need to login" 
         });
-    } catch (err) {
-        console.log("Error message:", err);
-        return res.status(500).json({ message: "Internal server error" });
-    }
-};
+      } else {
+        const token = jwt.sign(
+          {
+            email: decoded.email,
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: "2h" },
+          { algorithm: "RS256" }
+        );
+        return res.status(200).json({ new_token: token });
+      }
+    });
+  };
 
-export { SIGN_UP, LOGIN, REFRESH_TOKEN };
+export { SIGN_UP, LOGIN, GET_NEW_JWT_TOKEN };
