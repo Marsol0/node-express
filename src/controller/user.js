@@ -6,20 +6,17 @@ import uniqid from 'uniqid';
 
 const SIGN_UP = async (req, res) => {
     try {
-        const { name, email, password, money_balance  } = req.body;
+        const { name, email, password } = req.body;
 
-        // Validate email
         if (!email.includes("@")) {
             return res.status(400).json({ message: "Invalid email address, '@' is missing." });
         }
 
-        // Validate user name
         if (!name || name.length < 3) {
             return res.status(400).json({ message: "User name should be a minimum of 3 letters" });
         }
         const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
 
-        // Validate user password
         const passwordRegex = /^(?=.*\d).{6,}$/;
         if (!password || !passwordRegex.test(password)) {
             return res.status(400).json({ message: "Password should be at least 6 characters long and contain at least one digit." });
@@ -29,7 +26,7 @@ const SIGN_UP = async (req, res) => {
         const salt = bcrypt.genSaltSync(10);
         const hash = bcrypt.hashSync(password, salt);
 
-        // Create user model
+        
         const user = new userSchema({
             id: uniqid(),
             name: capitalizedName,
@@ -49,7 +46,7 @@ const SIGN_UP = async (req, res) => {
             },
             process.env.JWT_SECRET,
             { expiresIn: "2h" },
-            { algorithm: "RS256" }
+            
           );
           const tokenRefresh = jwt.sign(
             {
@@ -58,7 +55,7 @@ const SIGN_UP = async (req, res) => {
             },
             process.env.JWT_SECRET,
             { expiresIn: "24h" },
-            { algorithm: "RS256" }
+            
           );
        
         
@@ -76,7 +73,7 @@ const SIGN_UP = async (req, res) => {
 const LOGIN = async (req, res) => {
     try {
         
-        // Find user by email
+        
         const user = await userSchema.findOne({ email: req.body.email })
 
         if (!user) {
@@ -94,8 +91,8 @@ const LOGIN = async (req, res) => {
               userId: user._id,
             },
             process.env.JWT_SECRET,
-            { expiresIn: "1h" },
-            { algorithm: "RS256" }
+            { expiresIn: "2h" },
+            
           );
           const tokenRefresh = jwt.sign(
             {
@@ -104,10 +101,11 @@ const LOGIN = async (req, res) => {
             },
             process.env.JWT_SECRET,
             { expiresIn: "24h" },
-            { algorithm: "RS256" }
+           
           );
      
         return res.status(200).json({
+            Greeting: `Hello ${user.name}`,
             message: "You have successfully logged in.",
             token: token,
             tokenRefresh: tokenRefresh
@@ -135,11 +133,55 @@ const GET_NEW_JWT_TOKEN = (req, res) => {
           },
           process.env.JWT_SECRET,
           { expiresIn: "2h" },
-          { algorithm: "RS256" }
+          
         );
         return res.status(200).json({ new_token: token });
       }
     });
   };
 
-export { SIGN_UP, LOGIN, GET_NEW_JWT_TOKEN };
+
+  const GET_ALL_USERS = async (req, res) => {
+    try {
+       
+        const users = await userSchema.find().lean()
+        
+        
+        if (users.length === 0) {
+            return res.status(404).json({ message: 'No users found' });
+        }
+        const sortedUsers = users.sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Remove _id field from each user object
+        const usersWithoutId = sortedUsers.map(({ _id, ...userWithoutMongoId }) => userWithoutMongoId);
+
+        return res.status(200).json({ users: usersWithoutId });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        return res.status(500).json({ error: 'An error occurred while fetching users.' });
+    }
+};
+
+
+const GET_USER_BY_ID = async (req, res) => {
+    const id = req.params.id; 
+    
+    try {
+        const user = await userSchema.findOne({ id }).lean()
+        // lean() returns simpler object. don't need the full Mongoose document functionality
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        // splits the user object into two parts.
+        // A variable named _id is created and assigned the value
+        // A new object is created, containing all the properties of user except _id.
+        const { _id, ...userWithoutMongoId } = user;
+        
+        return res.status(200).json({ user: userWithoutMongoId });
+    } catch (error) {
+        console.error('Error retrieving user:', error); // Log the error for debugging
+        return res.status(500).json({ error: 'Error retrieving user' });
+    }
+};
+
+export { SIGN_UP, LOGIN, GET_NEW_JWT_TOKEN, GET_ALL_USERS, GET_USER_BY_ID };
